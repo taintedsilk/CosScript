@@ -16,48 +16,35 @@ local SpawnRemote = Remotes:WaitForChild("SpawnRemote")
 -- A local signal to bridge the hook and our waiting function
 local spawnInvokedSignal = Instance.new("BindableEvent")
 
--- ======================= THE HOOK (CORRECTED) =======================
+-- ======================= THE HOOK (FINAL CORRECTION) =======================
 -- Capture the original __index metamethod.
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(target, key)
-    -- First, call the original __index to get what it would normally return (the function we want to hook).
+    -- First, call the original __index to get what it would normally return (e.g., the InvokeServer function).
     local originalMember = oldIndex(target, key)
 
     -- Now, we check if this is the specific member we are interested in.
     if target == SpawnRemote and key == "InvokeServer" then
         
-        -- Instead of just logging, we return a BRAND NEW FUNCTION.
-        -- This new function will be called by the game script instead of the original.
+        -- Return a new function that will be called instead of the original.
         return function(...)
             print("HOOK: Intercepted a call to SpawnRemote:InvokeServer()!")
 
-            -- The arguments are passed to THIS function, so we can now capture them.
             local args = {...}
             
-            -- ================== ARGUMENT PRINTING ==================
-            print("--- Intercepted Arguments ---")
-            if #args > 0 then
-                for i, argument in ipairs(args) do
-                    local argumentType = type(argument)
-                    print(string.format("  - Argument #%d: %s (Type: %s)", i, tostring(argument), argumentType))
-                end
-            else
-                print("  - No arguments were detected.")
-            end
-            print("-----------------------------")
-            -- ==========================================================
+            local slotName = args[2] 
             
-            -- Fire our signal with the captured slot name for the waiting function.
-            local slotName = args[1]
             if type(slotName) == "string" then
+                print("HOOK: Captured slot name from Argument #2:", slotName)
+                -- Fire our signal with the correct slot name.
                 spawnInvokedSignal:Fire(slotName)
             else
-                warn("HOOK: Argument #1 was not a string, could not fire signal with slot name.")
+                warn("HOOK: Argument #2 was not a string, could not fire signal with slot name.")
             end
 
-            -- CRITICAL: Call the original function with the original target (self) and arguments.
-            -- This ensures the remote function still works as intended and returns any value it's supposed to.
-            return originalMember(target, ...)
+            -- CRITICAL: Call the original function with its original arguments.
+            -- '...' contains the correct 'self' and all other arguments, so we pass it directly.
+            return originalMember(...)
         end
     end
     
