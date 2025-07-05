@@ -17,7 +17,7 @@ local SpawnRemote = Remotes:WaitForChild("SpawnRemote")
 local spawnInvokedSignal = Instance.new("BindableEvent")
 
 -- ======================= THE HOOK =======================
--- This remains unchanged and is working correctly.
+-- This is working correctly and remains unchanged.
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(target, key)
     local originalMember = oldIndex(target, key)
@@ -26,10 +26,10 @@ oldIndex = hookmetamethod(game, "__index", function(target, key)
             print("HOOK: Intercepted SpawnRemote:InvokeServer()")
             local args = {...}
             
-            -- Print arguments for debugging
-            for i, argument in ipairs(args) do
-                print(string.format("  - Arg #%d: %s (Type: %s)", i, tostring(argument), type(argument)))
-            end
+            -- Debug printing of arguments
+            -- for i, argument in ipairs(args) do
+            --     print(string.format("  - Arg #%d: %s (Type: %s)", i, tostring(argument), type(argument)))
+            -- end
 
             local slotName = args[2] -- The actual slot name
             if type(slotName) == "string" then
@@ -46,7 +46,8 @@ oldIndex = hookmetamethod(game, "__index", function(target, key)
 end)
 -- =========================================================
 
--- This helper function remains unchanged
+-- This helper function processes a single slot to the reputation target.
+-- It remains unchanged.
 local function processSingleSlot(slotName)
     print("Now processing slot:", slotName)
     local reputationStat = PlayerGui:WaitForChild("Data"):WaitForChild(slotName):WaitForChild("Stats"):WaitForChild("LegoReputation")
@@ -59,24 +60,23 @@ local function processSingleSlot(slotName)
 end
 
 
--- ======================= THE CYCLE FUNCTION (REORDERED) =======================
--- This function now performs the actions in the correct sequence.
+-- This function runs one full, correctly ordered cycle.
+-- It remains unchanged.
 local function runFullCycle(slotToDelete)
     print("-----------------------------------------")
     print("Starting new cycle.")
 
-    -- 1. Start the server-side process which will lead to a new slot spawning.
+    -- 1. Start the event to trigger a new spawn.
     StartLegoEventRemote:FireServer()
 
-    -- 2. Wait for the hook to detect the SpawnRemote call and give us the new slot name.
+    -- 2. Wait for the new slot to be created.
     print("Waiting for new slot to spawn...")
     local newSlotName = spawnInvokedSignal.Event:Wait()
     print("New slot has spawned:", newSlotName)
     
-    -- A small, optional delay to ensure the new slot is fully rendered/initialized if needed.
     task.wait(0.2)
 
-    -- 3. NOW that the new slot exists, delete the previous one (if one was provided).
+    -- 3. Now that the new slot exists, delete the previous one.
     if slotToDelete then
         print("Deleting previous slot:", slotToDelete)
         local deleteArgs = { slotToDelete, false }
@@ -85,28 +85,20 @@ local function runFullCycle(slotToDelete)
         print("No previous slot to delete (first run).")
     end
 
-    -- 4. Run the processing loop for the newly spawned slot.
+    -- 4. Process the new slot.
     processSingleSlot(newSlotName)
 
     print("Cycle complete for slot", newSlotName)
     
-    -- 5. Return the name of the slot we just worked on, to be deleted in the next cycle.
+    -- 5. Return the name of the slot we just processed.
     return newSlotName
 end
 
 
--- ======================= EXECUTION LOGIC =======================
--- This part remains the same.
+-- ======================= INFINITE EXECUTION LOOP =======================
+print("Starting infinite automation process...")
+local slotNameToDelete = nil -- Start with no slot to delete
 
-print("\n--- RUNNING FIRST CYCLE ---")
-local slotFromFirstCycle = runFullCycle(nil)
-task.wait(1)
-
-print("\n--- RUNNING SECOND CYCLE ---")
-local slotFromSecondCycle = runFullCycle(slotFromFirstCycle)
-
-print("\n=========================================")
-print("Completed two cycles as requested.")
-print("First cycle processed:", slotFromFirstCycle)
-print("Second cycle processed:", slotFromSecondCycle)
-print("=========================================")
+while true do
+    slotNameToDelete = runFullCycle(slotNameToDelete)
+end
