@@ -16,50 +16,53 @@ local SpawnRemote = Remotes:WaitForChild("SpawnRemote")
 -- A local signal to bridge the hook and our waiting function
 local spawnInvokedSignal = Instance.new("BindableEvent")
 
--- ======================= THE HOOK (MODIFIED) =======================
--- This captures the original __index metamethod before we override it.
+-- ======================= THE HOOK (CORRECTED) =======================
+-- Capture the original __index metamethod.
 local oldIndex
-oldIndex = hookmetamethod(game, "__index", function(target, key, ...)
-    -- Check if the target is our remote AND the key is "InvokeServer"
+oldIndex = hookmetamethod(game, "__index", function(target, key)
+    -- First, call the original __index to get what it would normally return (the function we want to hook).
+    local originalMember = oldIndex(target, key)
+
+    -- Now, we check if this is the specific member we are interested in.
     if target == SpawnRemote and key == "InvokeServer" then
-        print("HOOK: Intercepted a call to SpawnRemote:InvokeServer()!")
         
-        -- Capture all arguments passed to the function into a table
-        local args = {...}
+        -- Instead of just logging, we return a BRAND NEW FUNCTION.
+        -- This new function will be called by the game script instead of the original.
+        return function(...)
+            print("HOOK: Intercepted a call to SpawnRemote:InvokeServer()!")
 
-        -- ================== NEW: ARGUMENT PRINTING ==================
-        print("--- Intercepted Arguments ---")
-        if #args > 0 then
-            -- Loop through all the captured arguments
-            for i, argument in ipairs(args) do
-                -- Get the datatype of the current argument
-                local argumentType = type(argument)
-                -- Print the details in a formatted string. 
-                -- We use tostring() to safely print any value, including instances or tables.
-                print(string.format("  - Argument #%d: %s (Type: %s)", i, tostring(argument), argumentType))
+            -- The arguments are passed to THIS function, so we can now capture them.
+            local args = {...}
+            
+            -- ================== ARGUMENT PRINTING ==================
+            print("--- Intercepted Arguments ---")
+            if #args > 0 then
+                for i, argument in ipairs(args) do
+                    local argumentType = type(argument)
+                    print(string.format("  - Argument #%d: %s (Type: %s)", i, tostring(argument), argumentType))
+                end
+            else
+                print("  - No arguments were detected.")
             end
-        else
-            print("  - No arguments were passed.")
-        end
-        print("-----------------------------")
-        -- ==========================================================
+            print("-----------------------------")
+            -- ==========================================================
+            
+            -- Fire our signal with the captured slot name for the waiting function.
+            local slotName = args[1]
+            if type(slotName) == "string" then
+                spawnInvokedSignal:Fire(slotName)
+            else
+                warn("HOOK: Argument #1 was not a string, could not fire signal with slot name.")
+            end
 
-        -- The original logic still needs to run.
-        -- We get the slot name from the first argument.
-        local slotName = args[1]
-        
-        if type(slotName) == "string" then
-            print("HOOK: Captured slot name from Argument #1:", slotName)
-            -- Fire our signal with the slot name so the waiting function can proceed
-            spawnInvokedSignal:Fire(slotName)
-        else
-            warn("HOOK: SpawnRemote was invoked, but Argument #1 was not a valid slot name string.")
+            -- CRITICAL: Call the original function with the original target (self) and arguments.
+            -- This ensures the remote function still works as intended and returns any value it's supposed to.
+            return originalMember(target, ...)
         end
     end
-
-    -- IMPORTANT: Call the original __index so we don't break functionality.
-    -- Pass all original arguments along.
-    return oldIndex(target, key, ...)
+    
+    -- If it's not the remote/key we care about, just return the original member without modification.
+    return originalMember
 end)
 -- ===================================================================
 
@@ -104,9 +107,8 @@ local function runFullCycle(slotToDelete)
     return newSlotName
 end
 
--- ======================= EXECUTION LOGIC =======================
--- We will now call the cycle function twice.
 
+-- ======================= EXECUTION LOGIC =======================
 print("\n--- RUNNING FIRST CYCLE ---")
 local slotFromFirstCycle = runFullCycle(nil)
 task.wait(1)
