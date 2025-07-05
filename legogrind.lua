@@ -16,86 +16,88 @@ local SpawnRemote = Remotes:WaitForChild("SpawnRemote")
 -- A local signal to bridge the hook and our waiting function
 local spawnInvokedSignal = Instance.new("BindableEvent")
 
--- ======================= THE HOOK (FINAL CORRECTION) =======================
--- Capture the original __index metamethod.
+-- ======================= THE HOOK =======================
+-- This remains unchanged and is working correctly.
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(target, key)
-    -- First, call the original __index to get what it would normally return (e.g., the InvokeServer function).
     local originalMember = oldIndex(target, key)
-
-    -- Now, we check if this is the specific member we are interested in.
     if target == SpawnRemote and key == "InvokeServer" then
-        
-        -- Return a new function that will be called instead of the original.
         return function(...)
-            print("HOOK: Intercepted a call to SpawnRemote:InvokeServer()!")
-
+            print("HOOK: Intercepted SpawnRemote:InvokeServer()")
             local args = {...}
             
-            local slotName = args[2] 
-            
-            if type(slotName) == "string" then
-                print("HOOK: Captured slot name from Argument #2:", slotName)
-                -- Fire our signal with the correct slot name.
-                spawnInvokedSignal:Fire(slotName)
-            else
-                warn("HOOK: Argument #2 was not a string, could not fire signal with slot name.")
+            -- Print arguments for debugging
+            for i, argument in ipairs(args) do
+                print(string.format("  - Arg #%d: %s (Type: %s)", i, tostring(argument), type(argument)))
             end
 
-            -- CRITICAL: Call the original function with its original arguments.
-            -- '...' contains the correct 'self' and all other arguments, so we pass it directly.
+            local slotName = args[2] -- The actual slot name
+            if type(slotName) == "string" then
+                print("HOOK: Captured slot name:", slotName)
+                spawnInvokedSignal:Fire(slotName)
+            else
+                warn("HOOK: Argument #2 was not a string.")
+            end
+
             return originalMember(...)
         end
     end
-    
-    -- If it's not the remote/key we care about, just return the original member without modification.
     return originalMember
 end)
--- ===================================================================
+-- =========================================================
 
-
--- This function processes a SINGLE slot until its reputation is -100
+-- This helper function remains unchanged
 local function processSingleSlot(slotName)
     print("Now processing slot:", slotName)
-    
     local reputationStat = PlayerGui:WaitForChild("Data"):WaitForChild(slotName):WaitForChild("Stats"):WaitForChild("LegoReputation")
-    
     while reputationStat.Value > -100 do
         local randomEgg = tostring(math.random(1, 5))
         LegoEggDestroyedRemote:FireServer(randomEgg)
         task.wait(0.1) 
     end
-    
     print("Reputation target of -100 reached for:", slotName)
 end
 
--- This function runs one complete cycle of the event.
+
+-- ======================= THE CYCLE FUNCTION (REORDERED) =======================
+-- This function now performs the actions in the correct sequence.
 local function runFullCycle(slotToDelete)
     print("-----------------------------------------")
     print("Starting new cycle.")
 
+    -- 1. Start the server-side process which will lead to a new slot spawning.
+    StartLegoEventRemote:FireServer()
+
+    -- 2. Wait for the hook to detect the SpawnRemote call and give us the new slot name.
+    print("Waiting for new slot to spawn...")
+    local newSlotName = spawnInvokedSignal.Event:Wait()
+    print("New slot has spawned:", newSlotName)
+    
+    -- A small, optional delay to ensure the new slot is fully rendered/initialized if needed.
+    task.wait(0.2)
+
+    -- 3. NOW that the new slot exists, delete the previous one (if one was provided).
     if slotToDelete then
         print("Deleting previous slot:", slotToDelete)
         local deleteArgs = { slotToDelete, false }
         DeleteSlotRemote:InvokeServer(unpack(deleteArgs))
     else
-        print("No previous slot to delete, this is the first run.")
+        print("No previous slot to delete (first run).")
     end
 
-    StartLegoEventRemote:FireServer()
-
-    print("Waiting for SpawnRemote to be invoked...")
-    local newSlotName = spawnInvokedSignal.Event:Wait()
-    print("New slot spawned:", newSlotName)
-
+    -- 4. Run the processing loop for the newly spawned slot.
     processSingleSlot(newSlotName)
 
     print("Cycle complete for slot", newSlotName)
+    
+    -- 5. Return the name of the slot we just worked on, to be deleted in the next cycle.
     return newSlotName
 end
 
 
 -- ======================= EXECUTION LOGIC =======================
+-- This part remains the same.
+
 print("\n--- RUNNING FIRST CYCLE ---")
 local slotFromFirstCycle = runFullCycle(nil)
 task.wait(1)
