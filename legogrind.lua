@@ -1,19 +1,7 @@
---[[
-    Universal Auto-Grinder with Rejoin & Repeat (v3 - Error Fix)
-    
-    Instructions:
-    1. SAVE this entire script as a .lua or .txt file.
-    2. UPLOAD the file to a public GitHub repository.
-    3. VIEW the file on GitHub and click the "Raw" button.
-    4. COPY the URL from your browser's address bar.
-    5. PASTE that URL into the `GITHUB_SCRIPT_URL` variable below.
-    6. EXECUTE this script in your chosen environment. The loop will begin automatically.
-]]
-
 -- ======================= CONFIGURATION =======================
 local GITHUB_SCRIPT_URL = "https://raw.githubusercontent.com/taintedsilk/CosScript/refs/heads/main/legogrind.lua"
-local GRIND_DURATION_MINUTES = 1
-local DEBUG = true
+local GRIND_DURATION_MINUTES = 30
+local DEBUG = false
 -- =============================================================
 
 
