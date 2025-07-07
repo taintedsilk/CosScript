@@ -1,12 +1,19 @@
+--[[
+    Universal Auto-Grinder with Rejoin & Repeat (v3 - Error Fix)
+    
+    Instructions:
+    1. SAVE this entire script as a .lua or .txt file.
+    2. UPLOAD the file to a public GitHub repository.
+    3. VIEW the file on GitHub and click the "Raw" button.
+    4. COPY the URL from your browser's address bar.
+    5. PASTE that URL into the `GITHUB_SCRIPT_URL` variable below.
+    6. EXECUTE this script in your chosen environment. The loop will begin automatically.
+]]
+
 -- ======================= CONFIGURATION =======================
--- IMPORTANT: Replace this with the RAW GitHub URL of your script.
 local GITHUB_SCRIPT_URL = "https://raw.githubusercontent.com/taintedsilk/CosScript/refs/heads/main/legogrind.lua"
-
--- How long to grind in each server before rejoining (in minutes).
 local GRIND_DURATION_MINUTES = 1
-
--- Set to true to print detailed logs for debugging, false to run silently.
-local DEBUG = false
+local DEBUG = true
 -- =============================================================
 
 
@@ -17,13 +24,11 @@ local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
-
--- Executor-specific function for queuing a script to run after teleporting.
 local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
 -- =============================================================
 
 
--- ======================= SERVER HOPPING LOGIC =======================
+-- ======================= SERVER HOPPING LOGIC (Unchanged) =======================
 local function joinSmallestServer()
     if not queueteleport then
         warn("Cannot rejoin: `queue_on_teleport` function not found in your executor.")
@@ -128,6 +133,7 @@ local function startGrindLoop()
     local StartLegoEventRemote = Remotes:WaitForChild("StartLegoEvent")
     local LegoEggDestroyedRemote = Remotes:WaitForChild("LegoEggDestroyed")
     local SpawnRemote = Remotes:WaitForChild("SpawnRemote")
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
     local spawnInvokedSignal = Instance.new("BindableEvent")
 
@@ -149,15 +155,40 @@ local function startGrindLoop()
     end)
     print("Hook for SpawnRemote has been set.")
     
+    -- ############ FIX IS HERE ############
+    -- This function is now more defensive to prevent errors.
     local function processSingleSlot(slotName)
         if DEBUG then print(string.format("DEBUG: PROCESS - Starting to process slot '%s'.", slotName)) end
-        local reputationStat = PlayerGui:WaitForChild("Data"):WaitForChild(slotName):WaitForChild("Stats"):WaitForChild("LegoReputation")
+    
+        -- Use pcall for the entire FindFirstChild chain to handle any part failing gracefully.
+        local reputationStat
+        local success, result = pcall(function()
+            -- Increased timeout to give the game more time to create the UI elements.
+            reputationStat = PlayerGui:WaitForChild("Data", 10) 
+                :WaitForChild(slotName, 10)
+                :WaitForChild("Stats", 10)
+                :WaitForChild("LegoReputation", 10)
+        end)
+    
+        -- Check if the object was successfully found.
+        if not success or not reputationStat then
+            warn(string.format("PROCESS FAILED: Could not find 'LegoReputation' for slot '%s'. The UI may not have loaded in time. Skipping.", slotName))
+            -- You can uncomment the line below to see the detailed pcall error if needed
+            -- if not success then warn("Pcall error: ", result) end
+            return -- Exit the function to prevent an error.
+        end
+        
+        if DEBUG then print(string.format("DEBUG: PROCESS - Initial reputation for '%s' is %d.", slotName, reputationStat.Value)) end
+        
         while reputationStat.Value > -100 do
             LegoEggDestroyedRemote:FireServer(tostring(math.random(1, 5)))
             task.wait(0.1) 
         end
+        
         if DEBUG then print(string.format("DEBUG: PROCESS - Finished processing slot '%s'.", slotName)) end
     end
+    -- ############ END OF FIX ############
+
 
     local function runFullCycle(slotToDelete)
         if DEBUG then print("\n--- STARTING NEW CYCLE ---") end
@@ -171,7 +202,7 @@ local function startGrindLoop()
         end
         
         if DEBUG then print(string.format("DEBUG: CYCLE - New slot is '%s'.", newSlotName)) end
-        task.wait(0.2)
+        task.wait(0.5) -- Increased wait time slightly for more stability
 
         if slotToDelete then
             DeleteSlotRemote:InvokeServer(slotToDelete, false)
@@ -199,7 +230,6 @@ local function startGrindLoop()
     spawnInvokedSignal:Destroy()
     print("Grind time finished. Hook has been removed.")
     
-    -- Return the name of the last slot for final deletion
     return lastProcessedSlot, DeleteSlotRemote
 end
 -- ===================================================================
@@ -207,25 +237,22 @@ end
 
 -- ======================= MAIN EXECUTION FLOW =======================
 
--- 1. Start the game by clicking play on the initial slots.
+
 pcall(pressPlayOnSlots)
 task.wait(5)
 
--- 2. Begin the main grind loop and get the name of the last slot processed.
 local lastProcessedSlot, DeleteSlotRemote = startGrindLoop()
 
--- 3. After the grind, delete the final active slot.
 if lastProcessedSlot and DeleteSlotRemote then
     print(string.format("Main grind complete. Deleting final slot '%s' before rejoining.", lastProcessedSlot))
     pcall(function()
         DeleteSlotRemote:InvokeServer(lastProcessedSlot, false)
     end)
-    task.wait(0.5) -- Give the server a moment to process the deletion.
+    task.wait(0.5)
 else
     print("Main grind complete. No final slot to delete.")
 end
 
--- 4. Find a new server and rejoin.
 print("Preparing to rejoin a new server.")
 joinSmallestServer()
 -- ===================================================================
