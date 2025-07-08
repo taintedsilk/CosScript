@@ -1,10 +1,9 @@
 -- ======================= CONFIGURATION =======================
 local GITHUB_SCRIPT_URL = "https://raw.githubusercontent.com/taintedsilk/CosScript/refs/heads/main/legogrind.lua"
-local GRIND_DURATION_MINUTES = 120
+local GRIND_DURATION_MINUTES = 30
 local DEBUG = false
 -- =============================================================
-game:GetService("RunService"):Set3dRenderingEnabled(false)
-setfpscap(30)
+
 -- ======================= SERVICES & LIBS =======================
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
@@ -14,9 +13,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
 -- =============================================================
+-- Disable rendering for less resource usage while farming
 game:GetService("RunService"):Set3dRenderingEnabled(false)
 setfpscap(30)
--- ======================= SERVER HOPPING LOGIC (Unchanged) =======================
+
+-- ======================= SERVER HOPPING LOGIC =======================
 local function joinSmallestServer()
     if not queueteleport then
         warn("Cannot rejoin: `queue_on_teleport` function not found in your executor.")
@@ -65,9 +66,50 @@ local function joinSmallestServer()
 end
 -- ===================================================================
 
+-- Must claim daily reward to spawn in
+local function claimDailyReward()
+    print("Checking for daily reward popup...")
 
--- ======================= GAME-SPECIFIC LOGIC =======================
+    -- Wait for the Player's GUI to be available
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 
+    -- Wait up to 10 seconds for the DailyLoginGui to appear.
+    -- If it doesn't, we assume it's already been claimed and continue.
+    local dailyLoginGui = playerGui:WaitForChild("DailyLoginGui", 10)
+
+    if dailyLoginGui then
+        print("Daily Login GUI found. Attempting to claim reward...")
+        
+        -- Use a protected call (pcall) to prevent errors if the button structure is unexpected
+        local success, err = pcall(function()
+            -- Find the frame containing the buttons
+            local currencyFrame = dailyLoginGui:WaitForChild("ContainerFrame", 5):WaitForChild("CurrencyFrame", 5)
+            
+            -- Wait for the Claim button's label and click it
+            local claimLabel = currencyFrame:WaitForChild("ClaimButton", 5):WaitForChild("UpperLabel", 5)
+            firesignal(claimLabel.MouseButton1Click)
+            print("Clicked Claim button.")
+            
+            -- Wait a moment for the game to process the claim
+            task.wait(0.5) 
+            
+            -- Wait for the Close button's label and click it
+            local closeLabel = currencyFrame:WaitForChild("CloseButton", 5):WaitForChild("UpperLabel", 5)
+            firesignal(closeLabel.MouseButton1Click)
+            print("Clicked Close button.")
+        end)
+        
+        if not success then
+            warn("Could not claim daily reward, an object was missing: " .. tostring(err))
+        else
+            print("Daily reward claimed successfully.")
+        end
+    else
+        print("Daily Login GUI not found. Assuming it was already claimed.")
+    end
+end
+
+-- Spawn in any slot
 local function pressPlayOnSlots()
     print("Attempting to press 'Play' on the first 3 slots...")
     task.wait(2) 
@@ -143,27 +185,20 @@ local function startGrindLoop()
     end)
     print("Hook for SpawnRemote has been set.")
     
-    -- ############ FIX IS HERE ############
-    -- This function is now more defensive to prevent errors.
     local function processSingleSlot(slotName)
         if DEBUG then print(string.format("DEBUG: PROCESS - Starting to process slot '%s'.", slotName)) end
     
-        -- Use pcall for the entire FindFirstChild chain to handle any part failing gracefully.
         local reputationStat
         local success, result = pcall(function()
-            -- Increased timeout to give the game more time to create the UI elements.
             reputationStat = PlayerGui:WaitForChild("Data", 10) 
                 :WaitForChild(slotName, 10)
                 :WaitForChild("Stats", 10)
                 :WaitForChild("LegoReputation", 10)
         end)
     
-        -- Check if the object was successfully found.
         if not success or not reputationStat then
             warn(string.format("PROCESS FAILED: Could not find 'LegoReputation' for slot '%s'. The UI may not have loaded in time. Skipping.", slotName))
-            -- You can uncomment the line below to see the detailed pcall error if needed
-            -- if not success then warn("Pcall error: ", result) end
-            return -- Exit the function to prevent an error.
+            return
         end
         
         if DEBUG then print(string.format("DEBUG: PROCESS - Initial reputation for '%s' is %d.", slotName, reputationStat.Value)) end
@@ -175,7 +210,6 @@ local function startGrindLoop()
         
         if DEBUG then print(string.format("DEBUG: PROCESS - Finished processing slot '%s'.", slotName)) end
     end
-    -- ############ END OF FIX ############
 
 
     local function runFullCycle(slotToDelete)
@@ -190,7 +224,7 @@ local function startGrindLoop()
         end
         
         if DEBUG then print(string.format("DEBUG: CYCLE - New slot is '%s'.", newSlotName)) end
-        task.wait(0.5) -- Increased wait time slightly for more stability
+        task.wait(0.5) 
 
         if slotToDelete then
             DeleteSlotRemote:InvokeServer(slotToDelete, false)
@@ -225,6 +259,9 @@ end
 
 -- ======================= MAIN EXECUTION FLOW =======================
 
+-- Step 1: Attempt to claim the daily reward first.
+pcall(claimDailyReward)
+task.wait(1) 
 
 pcall(pressPlayOnSlots)
 task.wait(5)
@@ -242,5 +279,6 @@ else
 end
 
 print("Preparing to rejoin a new server.")
+-- Rejoin because instance might use too much resource, this prevent crashing
 joinSmallestServer()
 -- ===================================================================
