@@ -1,10 +1,10 @@
 -- ======================= CONFIGURATION =======================
 local GITHUB_SCRIPT_URL = "https://raw.githubusercontent.com/taintedsilk/CosScript/refs/heads/main/legogrind.lua"
-local GRIND_DURATION_MINUTES = 30
+local GRIND_DURATION_MINUTES = 120
 local DEBUG = false
 -- =============================================================
-
-
+game:GetService("RunService"):Set3dRenderingEnabled(false)
+setfpscap(30)
 -- ======================= SERVICES & LIBS =======================
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
@@ -14,8 +14,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
 -- =============================================================
-
-
+game:GetService("RunService"):Set3dRenderingEnabled(false)
+setfpscap(30)
 -- ======================= SERVER HOPPING LOGIC (Unchanged) =======================
 local function joinSmallestServer()
     if not queueteleport then
