@@ -34,7 +34,7 @@ local function chunkAndDropAllCarcasses()
 	local allCarcasses = {}
 	for _, child in ipairs(foodFolder:GetChildren()) do
 		-- Check if it's a model named "Carcass"
-		if child.Name == "Carcass" and child:IsA("Model") then
+		if child.Name == "Carcass" then
 			-- A model's position is determined by its PrimaryPart. If it's not set, we can't get a location.
 			if child.PrimaryPart then
 				table.insert(allCarcasses, child)
