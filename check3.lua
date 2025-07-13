@@ -71,7 +71,7 @@ task.spawn(function()
 
     for _, foodItem in ipairs(FoodContainer:GetChildren()) do
         -- Check if the name is in our valid list and it has a value > 0
-        if VALID_CARCASS_NAMES[foodItem.Name] and foodItem:GetAttribute("Value") > 0 then
+        if VALID_CARCASS_NAMES[foodItem.Name] and foodItem:GetAttribute("Value") > 10 then
             local itemPos = getItemPosition(foodItem)
             if itemPos then
                 local distance = (playerPosition - itemPos).Magnitude
