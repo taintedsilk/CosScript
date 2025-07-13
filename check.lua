@@ -55,7 +55,7 @@ while _G.RunCrystalMover and task.wait(3) do
                 
                 -- Apply the changes
                 crystal.Anchored = true
-                crystal.size = crystal.size * SIZE_MULTIPLIER
+                crystal.Size = crystal.Size * SIZE_MULTIPLIER
                 crystal.CFrame = targetCFrame
 
                 -- Update the offset so the next crystal doesn't stack on top
