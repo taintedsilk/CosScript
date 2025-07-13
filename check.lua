@@ -1,91 +1,84 @@
--- This must be a LocalScript in a client-side container (e.g., StarterPlayerScripts).
--- It uses a debug-only function and should not be used in a production game.
+--===================================================================
+--                      CONFIGURATION
+--===================================================================
 
-print("HOOKER: Preparing to hook UserInputService.InputBegan")
+-- Set to 'false' in your executor console to stop the loop
+_G.RunCrystalMover = true 
 
-local UserInputService = game:GetService("UserInputService")
-local inputBeganEvent = UserInputService.InputBegan
+-- How far in front of you the crystals should appear
+local DISTANCE_IN_FRONT = 8
 
--- We need to store the original :Connect function to call it later.
--- hookmetamethod will return it to us.
-local originalConnect
+-- How far apart the crystals should be from each other
+local SPACING = 2 
 
--- This is the function that will replace the event's original :Connect method.
-local function hookedConnect(self, listenerFunction)
-	-- 'self' is the event object itself (inputBeganEvent).
-	-- 'listenerFunction' is the function that another script is trying to connect.
-	
-	print("HOOKER: Intercepted a :Connect call to InputBegan!")
+-- The size multiplier (0.5 means 50% of their original size)
+local SIZE_MULTIPLIER = 0.5
 
-	-- This is the core of our hook. We create a NEW function that wraps the old one.
-	local wrappedListener = function(inputObject, gameProcessedEvent)
-		-- Our spy logic goes here. We run it BEFORE the original function.
-		if inputObject.UserInputType == Enum.UserInputType.MouseButton1 then
-			print("HOOKER: Mouse 1 Click was TRIGGERED! Firing original listener now.")
-			-- We could even choose to *not* call the original listener here
-			-- if we wanted to "swallow" or block the input from other scripts.
-		end
-		
-		-- IMPORTANT: Call the original function that the other script provided.
-		-- This ensures we don't break the game's functionality.
-		-- We use a pcall for safety in case the original listener function errors.
-		pcall(listenerFunction, inputObject, gameProcessedEvent)
-	end
+print("Crystal Mover script started. To stop, set _G.RunCrystalMover to false.")
 
-	-- Now, we call the *original* :Connect method, but we pass our
-	-- new "wrapped" function instead of the one we received.
-	return originalConnect(self, wrappedListener)
+--===================================================================
+--                      SETUP
+--===================================================================
+
+local Players = game:GetService("Players")
+local localPlayer = Players.LocalPlayer
+local crystalSpawnsFolder = workspace:WaitForChild("Lego_Interactions"):WaitForChild("CrystalSpawns")
+
+--===================================================================
+--                      MAIN LOOP
+--===================================================================
+
+while _G.RunCrystalMover and task.wait(1) do
+    local character = localPlayer.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+
+    -- If player's character or root part doesn't exist, skip this cycle
+    if not rootPart then
+        continue -- Skips to the next 'task.wait(1)'
+    end
+
+    local horizontalOffset = 0
+    local crystalsFound = 0
+
+    -- Find all crystals on every loop, since they get recreated
+    for _, spawnFolder in ipairs(crystalSpawnsFolder:GetChildren()) do
+        -- Check if the item is a Model/Folder and contains a crystal
+        if spawnFolder:IsA("Configuration") or spawnFolder:IsA("Model") then
+            local crystal = spawnFolder:FindFirstChild("Crystal")
+
+            if crystal and crystal:IsA("BasePart") then
+                -- This is a valid crystal, let's move it
+                crystalsFound = crystalsFound + 1
+
+                -- Calculate the position in a line in front of the player
+                local targetCFrame = rootPart.CFrame * CFrame.new(horizontalOffset, 0, -DISTANCE_IN_FRONT)
+
+                -- Apply the changes
+                crystal.Anchored = true
+                crystal.Size = crystal.Size * SIZE_MULTIPLIER
+                crystal.CFrame = targetCFrame
+
+                -- Update the offset so the next crystal doesn't stack on top
+                horizontalOffset = horizontalOffset + SPACING
+            end
+        end
+    end
+    
+    -- Center the line of crystals in front of the player
+    if crystalsFound > 0 then
+        local totalWidth = (crystalsFound - 1) * SPACING
+        local startingOffset = -totalWidth / 2
+        
+        local currentOffset = startingOffset
+        for _, spawnFolder in ipairs(crystalSpawnsFolder:GetChildren()) do
+             local crystal = spawnFolder:FindFirstChild("Crystal")
+             if crystal and crystal:IsA("BasePart") and crystal.Anchored then -- Only move crystals we've processed
+                local targetCFrame = rootPart.CFrame * CFrame.new(currentOffset, 0, -DISTANCE_IN_FRONT)
+                crystal.CFrame = targetCFrame
+                currentOffset = currentOffset + SPACING
+            end
+        end
+    end
 end
 
--- Here is where we actually apply the hook.
--- We will hook __namecall because it's the metamethod that fires for colon-syntax calls like "Event:Connect()".
-local success, hooker = pcall(function()
-	return hookmetamethod(inputBeganEvent, "__namecall")
-end)
-
-if not success then
-	warn("HOOKER: Failed to get hookmetamethod. The script may not have the required permission level.")
-	return
-end
-
--- The hooker function applies our new function and returns the original one.
-local originalNamecall = hooker(function(self, ...)
-	local args = {...}
-	local methodName = args[1]
-	
-	-- We only care about hijacking the "Connect" method.
-	if methodName == "Connect" then
-		-- When we called originalConnect for the first time, it didn't exist yet.
-		-- Let's create a temporary version of it by calling the original namecall.
-		if not originalConnect then
-			originalConnect = function(...) return originalNamecall(...) end
-		end
-		
-		-- Redirect the call to our custom hookedConnect function.
-		return hookedConnect(self, args[2])
-	end
-	
-	-- For any other method calls (like :Wait()), let them pass through normally.
-	return originalNamecall(self, ...)
-end)
-
-print("HOOKER: Hook on InputBegan is active. Waiting for clicks...")
-
--- ===================================================================
--- DEMONSTRATION: This part simulates another script in your game.
--- Our hook will intercept this connection below.
--- ===================================================================
-wait(1)
-print("\nDEMO: A separate script is now connecting to InputBegan...")
-
-UserInputService.InputBegan:Connect(function(input, isTyping)
-	if isTyping then return end
-	
-	if input.UserInputType == Enum.UserInputType.Keyboard then
-		print("DEMO SCRIPT: A key was pressed: " .. input.KeyCode.Name)
-	elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-		print("DEMO SCRIPT: I detected a mouse click!")
-	end
-end)
-
-print("DEMO: Connection complete. Try clicking or typing!")
+print("Crystal Mover script has been stopped.")
