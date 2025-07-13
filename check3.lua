@@ -1,5 +1,5 @@
 -- =================================================================
--- Script: Auto Spiral Chunk & Drop (Constant Search Version)
+-- Script: Auto Spiral Chunk & Drop (Constant Search Version - Corrected)
 -- Description: Teleports the player in a spiral pattern. At each
 -- point, it finds the nearest valuable carcass, chunks it, and
 -- drops the food.
@@ -42,7 +42,8 @@ end
 
 -- New function to find the closest carcass from a given position.
 local function findClosestValidCarcass(searchPosition, maxSearchDistance)
-    local foodContainer = workspace:GetService("Interactions"):FindFirstChild("Food")
+    -- CORRECTED LINE: Access 'Interactions' as a direct child of workspace.
+    local foodContainer = workspace:WaitForChild("Interactions"):WaitForChild("Food")
     if not foodContainer then return nil end
 
     local bestTarget = nil
@@ -80,7 +81,7 @@ task.spawn(function()
     end
 
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local rootPart = character:WaitForChild("HumanoidRootPart")
+    local rootPart = character:WaitForchild("HumanoidRootPart")
     
     if not rootPart then
         warn("Player HumanoidRootPart not found. Aborting.")
