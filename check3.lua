@@ -66,7 +66,7 @@ task.spawn(function()
             character = LocalPlayer.Character
         end
         
-        local rootPart = character:WaitForChild("HumanoidRootPart")
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
         if not rootPart then
             warn("Player HumanoidRootPart not found. Skipping cycle.")
             task.wait(DELAY_BETWEEN_SEARCHES)
@@ -102,7 +102,7 @@ task.spawn(function()
 
             for i = 1, NUM_DROPS do
                 -- Re-check if the character and target still exist before each action
-                if not (character and character.Parent and targetCarcass and targetCarcass.Parent and targetCarcass:GetAttribute("Value") > 10) then
+                if not (targetCarcass and targetCarcass:GetAttribute("Value") > 10) then
                     print("Player, target carcass, or its value was removed. Finding new target.")
                     break -- Exit the for loop to find a new carcass
                 end
