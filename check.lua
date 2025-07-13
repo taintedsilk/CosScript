@@ -6,7 +6,7 @@
 _G.RunCrystalMover = true 
 
 -- How far in front of you the crystals should appear
-local DISTANCE_IN_FRONT = 8
+local DISTANCE_IN_FRONT = 30
 
 -- How far apart the crystals should be from each other
 local SPACING = 2 
@@ -52,9 +52,10 @@ while _G.RunCrystalMover and task.wait(3) do
 
                 -- Calculate the position in a line in front of the player
                 local targetCFrame = rootPart.CFrame * CFrame.new(horizontalOffset, 0, -DISTANCE_IN_FRONT)
-
+                
                 -- Apply the changes
                 crystal.Anchored = true
+                crystal.size = crystal.size * SIZE_MULTIPLIER
                 crystal.CFrame = targetCFrame
 
                 -- Update the offset so the next crystal doesn't stack on top
