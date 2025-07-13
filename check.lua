@@ -28,7 +28,7 @@ local crystalSpawnsFolder = workspace:WaitForChild("Lego_Interactions"):WaitForC
 --                      MAIN LOOP
 --===================================================================
 
-while _G.RunCrystalMover and task.wait(1) do
+while _G.RunCrystalMover and task.wait(3) do
     local character = localPlayer.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
 
@@ -55,7 +55,6 @@ while _G.RunCrystalMover and task.wait(1) do
 
                 -- Apply the changes
                 crystal.Anchored = true
-                crystal.Size = crystal.Size * SIZE_MULTIPLIER
                 crystal.CFrame = targetCFrame
 
                 -- Update the offset so the next crystal doesn't stack on top
