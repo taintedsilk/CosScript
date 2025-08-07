@@ -1,11 +1,29 @@
--- =================================================================
--- Prerequisites & Helper Functions
--- =================================================================
-
--- Make sure you do NOT have a line like 'local loadstring = "..."' anywhere above this!
-
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+
+-- UI Paths for Vitals
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local HungerLabel = PlayerGui:WaitForChild("CreatureInfoGui"):WaitForChild("ContainerFrame"):WaitForChild("TabFrames"):WaitForChild("MyCreature"):WaitForChild("StatsFrame"):WaitForChild("VitalityFrame"):WaitForChild("Hunger"):WaitForChild("AmountLabel")
+local ThirstLabel = PlayerGui:WaitForChild("CreatureInfoGui"):WaitForChild("ContainerFrame"):WaitForChild("TabFrames"):WaitForChild("MyCreature"):WaitForChild("StatsFrame"):WaitForChild("VitalityFrame"):WaitForChild("Thirst"):WaitForChild("AmountLabel")
+
+
+-- Helper to parse vital stats like "10/100"
+local function getVitals(label)
+	if not label then return 0, 1 end
+	-- Use string matching to safely extract current and max values
+	local current, max = label.Text:match("([%d,]+)/([%d,]+)")
+	if current and max then
+		-- Remove commas for proper conversion to number
+		current = tonumber(current:gsub(",", ""))
+		max = tonumber(max:gsub(",", ""))
+		if current and max then
+			return current, max
+		end
+	end
+	-- Return a default value that ensures the condition passes if parsing fails
+	return 0, 1
+end
+
 
 -- Helper for "Auto Drink"
 local function GetChildWithHighestAttribute(container, attributeName, customCheck)
@@ -83,14 +101,20 @@ MainTab:Toggle({
                 
                 print("Auto Drink started.")
                 while Flags.AutoDrink and task.wait(1) do
-                    local BestLake = GetChildWithHighestAttribute(LakesContainer, "Water", function(Child)
-                        return not Child:GetAttribute("Sickly")
-                    end)
-                    if BestLake then
-                        local waterAmount = BestLake:GetAttribute("Water")
-                        print("Found best lake: " .. BestLake.Name .. " (Water: " .. tostring(waterAmount) .. "). Firing remote.")
-                        local args = { BestLake }
-                        DrinkRemote:FireServer(unpack(args))
+                    local currentThirst, maxThirst = getVitals(ThirstLabel)
+                    
+                    if (currentThirst / maxThirst) < 0.95 then
+                        local BestLake = GetChildWithHighestAttribute(LakesContainer, "Water", function(Child)
+                            return not Child:GetAttribute("Sickly")
+                        end)
+                        if BestLake then
+                            local waterAmount = BestLake:GetAttribute("Water")
+                            print("Thirst at " .. currentThirst .. "/" .. maxThirst .. ". Drinking from: " .. BestLake.Name .. " (Water: " .. tostring(waterAmount) .. ").")
+                            local args = { BestLake }
+                            DrinkRemote:FireServer(unpack(args))
+                        end
+                    else
+                        print("Thirst is above 95%. Skipping.")
                     end
                 end
                 print("Auto Drink stopped.")
@@ -105,7 +129,7 @@ MainTab:Toggle({
 
 MainTab:Toggle({
     Title = "🍔 Auto Eat",
-    Desc = "Automatically eats the highest-priority food nearby.",
+    Desc = "Eats a random, valid food item nearby.",
     Value = false,
     Callback = function(value)
         Flags.AutoEat = value
@@ -118,54 +142,45 @@ MainTab:Toggle({
 
                 print("Auto Eat started.")
                 while Flags.AutoEat and task.wait(1) do
-                    local character = LocalPlayer.Character
-                    if not character then continue end
-                    local rootPart = character:FindFirstChild("HumanoidRootPart")
-                    if not rootPart then continue end
+                    local currentHunger, maxHunger = getVitals(HungerLabel)
 
-                    local playerPosition = rootPart.Position
-                    local MAX_DISTANCE = 200
-                    local priority1_foods, priority2_foods, priority3_foods = {}, {}, {}
+                    if (currentHunger / maxHunger) < 0.95 then
+                        local character = LocalPlayer.Character
+                        if not character then continue end
+                        local rootPart = character:FindFirstChild("HumanoidRootPart")
+                        if not rootPart then continue end
 
-                    for _, item in ipairs(FoodContainer:GetChildren()) do
-                        local itemPosition = getItemPosition(item)
-                        if not itemPosition or (playerPosition - itemPosition).Magnitude > MAX_DISTANCE then
-                            continue
-                        end
+                        local playerPosition = rootPart.Position
+                        local MAX_DISTANCE = 200
+                        local validFoods = {}
 
-                        local name = item.Name
-                        if name == "Seaweed Pods" or name == "Berries" or name == "Plant Carcass" then
-                            if not item:GetAttribute("rotten") then
-                                table.insert(priority1_foods, item)
+                        for _, item in ipairs(FoodContainer:GetChildren()) do
+                            -- Check 1: Distance
+                            local itemPosition = getItemPosition(item)
+                            if not itemPosition or (playerPosition - itemPosition).Magnitude > MAX_DISTANCE then
+                                continue
                             end
-                        elseif name == "Fruit" then
+
+                            -- Check 2: Not rotten
+                            if item:GetAttribute("rotten") then
+                                continue
+                            end
+
+                            -- Check 3: Value is nil or greater than 0
                             local val = item:GetAttribute("Value")
-                            if val and typeof(val) == "number" and val > 0 then
-                                table.insert(priority2_foods, item)
-                            end
-                        elseif name == "Grass" or name == "Algae" then
-                            table.insert(priority3_foods, item)
-                        end
-                    end
-
-                    local bestTarget = nil
-                    local targetList = #priority1_foods > 0 and priority1_foods or (#priority2_foods > 0 and priority2_foods or (#priority3_foods > 0 and priority3_foods))
-                    
-                    if targetList then
-                        local closestDistance = math.huge
-                        for _, food in ipairs(targetList) do
-                            local dist = (playerPosition - getItemPosition(food)).Magnitude
-                            if dist < closestDistance then
-                                closestDistance = dist
-                                bestTarget = food
+                            if val == nil or (typeof(val) == "number" and val > 0) then
+                                table.insert(validFoods, item)
                             end
                         end
-                    end
 
-                    if bestTarget then
-                        -- FIXED: Print the name *before* firing the remote to avoid an error.
-                        print("Eating best target: " .. bestTarget.Name)
-                        FoodRemote:FireServer(bestTarget)
+                        if #validFoods > 0 then
+                            -- Pick a random food from the valid list
+                            local randomFood = validFoods[math.random(1, #validFoods)]
+                            print("Hunger at " .. currentHunger .. "/" .. maxHunger .. ". Randomly eating: " .. randomFood.Name)
+                            FoodRemote:FireServer(randomFood)
+                        end
+                    else
+                        print("Hunger is above 95%. Skipping.")
                     end
                 end
                 print("Auto Eat stopped.")
