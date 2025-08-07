@@ -10,17 +10,15 @@ local ThirstLabel = PlayerGui:WaitForChild("CreatureInfoGui"):WaitForChild("Cont
 -- Helper to parse vital stats like "10/100"
 local function getVitals(label)
 	if not label then return 0, 1 end
-	-- Use string matching to safely extract current and max values
 	local current, max = label.Text:match("([%d,]+)/([%d,]+)")
 	if current and max then
-		-- Remove commas for proper conversion to number
-		current = tonumber(current:gsub(",", ""))
-		max = tonumber(max:gsub(",", ""))
+        -- FIXED: Wrap gsub in parentheses to only pass the first return value to tonumber
+		current = tonumber((current:gsub(",", "")))
+		max = tonumber((max:gsub(",", "")))
 		if current and max then
 			return current, max
 		end
 	end
-	-- Return a default value that ensures the condition passes if parsing fails
 	return 0, 1
 end
 
